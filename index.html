@@ -1,0 +1,1017 @@
+﻿<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Live Advanced Trading Station</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <style>
+        :root {
+            --bg-main: #131722; --bg-panel: #1c2030; --border-color: #2b313f;
+            --text-gray: #b2b5be; --color-up: #26a69a; --color-down: #ef5350; --color-active: #2962ff;
+        }
+
+        body {
+            margin: 0; padding: 0; background-color: var(--bg-main); color: #fff;
+            font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        .top-navbar { min-height: 56px; background-color: var(--bg-panel); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding: 8px 16px; justify-content: space-between; flex-shrink: 0; gap: 12px; box-sizing: border-box; z-index: 20; }
+        .nav-left { display: flex; align-items: center; gap: 12px; }
+        .market-live-title { font-size: 16px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+        .live-dot { width: 8px; height: 8px; background: var(--color-up); border-radius: 50%; box-shadow: 0 0 8px var(--color-up); animation: blink 1.5s infinite; }
+        
+        .timer-countdown { color: #ffffff; font-weight: bold; font-size: 14px; min-width: 30px; transition: color 0.2s; }
+        .timer-orange-blink { color: #ffd900 !important; animation: blink 0.6s infinite !important; }
+        .timer-red-blink { color: #eb0804 !important; animation: blink 0.4s infinite !important; }
+
+        .chart-center-overlay-timer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 200px; 
+            font-weight: 900;
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            pointer-events: none; 
+            z-index: 2147483647 !important; 
+            display: none;
+            user-select: none;
+            -webkit-text-stroke: 3px #ffffff; 
+            animation: pulse-effect 1s infinite alternate;
+        }
+        @keyframes pulse-effect {
+            0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.85; }
+            100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+        }
+
+        .info-badge { background: #242939; padding: 4px 10px; border-radius: 4px; font-size: 13px; color: var(--text-gray); border: 1px solid var(--border-color); }
+        .info-badge span { font-weight: bold; color: #fff; }
+        .prediction-box { display: flex; align-items: center; gap: 8px; background: #1e222d; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 13px; color: var(--text-gray); }
+        .val-pred { font-weight: bold; padding: 2px 8px; background: var(--bg-main); border-radius: 4px; }
+        .pred-big { color: var(--color-up); text-shadow: 0 0 8px rgba(38, 166, 154, 0.4); }
+        .pred-small { color: var(--color-down); text-shadow: 0 0 8px rgba(239, 83, 80, 0.4); }
+        .pred-wait { color: #ffeb3b; }
+        .divider { width: 1px; height: 24px; background-color: var(--border-color); }
+
+        .btn-group { display: flex; background: #131722; padding: 2px; border-radius: 6px; border: 1px solid var(--border-color); }
+        .nav-btn { background: transparent; border: none; color: var(--text-gray); font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 4px; font-weight: 500; transition: 0.1s; }
+        .nav-btn:hover { color: #fff; background: #242939; }
+        .nav-btn.active { background: var(--color-active); color: #fff; }
+        
+        .param-input { width: 25px; background: transparent; border: none; border-bottom: 1px solid var(--text-gray); color: #fff; font-weight: bold; text-align: center; margin-left: 2px; outline: none; font-size:11px; }
+        .param-input:focus { border-bottom-color: var(--color-active); }
+
+        .main-workspace { display: flex; flex-grow: 1; height: calc(100vh - 56px); width: 100%; position: relative; }
+        .left-toolbar { width: 48px; border-right: 1px solid var(--border-color); background-color: var(--bg-main); display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 10px; flex-shrink: 0; z-index: 10; }
+        .tool-btn { width: 34px; height: 34px; background: transparent; border: none; color: var(--text-gray); font-size: 16px; border-radius: 6px; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+        .tool-btn:hover { background-color: var(--bg-panel); color: #fff; }
+        .tool-btn.active { background-color: rgba(41, 98, 255, 0.2); color: var(--color-active); }
+
+        .chart-container-pane { flex-grow: 1; position: relative; background-color: var(--bg-main); display: flex; flex-direction: column; min-width: 0; }
+        
+        .main-chart-view { position: relative; width: 100%; height: 100%; transition: height 0.3s; }
+        .rsi-chart-view { position: relative; width: 100%; height: 0%; border-top: 1px solid var(--border-color); display: none; transition: height 0.3s; }
+        
+        #chart-div, #rsi-div { width: 100%; height: 100%; z-index: 1; }
+        
+        #drawing-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+        #drawing-svg * { pointer-events: all; cursor: pointer; }
+
+        .tv-zoom-tools { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: rgba(30, 34, 45, 0.85); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color); z-index: 15; backdrop-filter: blur(4px); }
+        .tv-zoom-tools button { background: transparent; color: var(--text-gray); border: none; padding: 4px 14px; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        .tv-zoom-tools button:hover { background: #3b404d; color: #fff; }
+
+        .digit-trend-sidebar { width: 238px; border-left: 1px solid var(--border-color); background-color: var(--bg-panel); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; }
+        .trend-header { padding: 12px; font-size: 10px; font-weight: bold; color: #faa018; border-bottom: 1px solid var(--border-color); text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .trend-matrix-wrapper { position: relative; padding: 10px 16px; background: #171a26; display: flex !important; flex-direction: column; justify-content: space-between; height: 350px; box-sizing: border-box; overflow: hidden; }
+        .trend-grid-header { display: flex; justify-content: space-between; z-index: 2; margin-bottom: 4px; }
+        .trend-grid-header span { width: 18px; text-align: center; font-size: 10px; font-weight: bold; color: var(--text-gray); }
+
+        .trend-row-line { display: flex; justify-content: space-between; position: relative; z-index: 2; align-items: center; }
+        .trend-cell-slot { width: 18px; height: 18px; display: flex; justify-content: center; align-items: center; }
+        .trend-dot-inactive { width: 5px; height: 5px; background-color: #3b404d; border-radius: 50%; }
+        .trend-dot-active { width: 18px; height: 18px; display: flex; justify-content: center; align-items: center; font-size: 11px; font-weight: bold; color: #ffffff; border-radius: 50%; }
+        
+        .glow-violet { background-color: #580d9e; box-shadow: 0 0 6px #e7d7f5; }
+        .glow-green { background-color: #2a8318; box-shadow: 0 0 6px #e1f5da; }
+        .glow-red { background-color: #d40707; box-shadow: 0 0 6px #f5dfdf; }
+
+        #trend-lines-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+
+        .right-prediction-sidebar { width: 300px; border-left: 1px solid var(--border-color); background-color: var(--bg-main); display: flex; flex-direction: column; flex-shrink: 0; box-sizing: border-box; z-index: 10; }
+        .predict-header { padding: 16px; font-size: 14px; font-weight: bold; color: #fff; border-bottom: 1px solid var(--border-color); background-color: var(--bg-panel); text-align: center; }
+        .predict-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; overflow-y: auto; }
+        .predict-card { background-color: var(--bg-panel); border: 1px solid var(--border-color); padding: 14px; border-radius: 6px; text-align: center; }
+        .card-title { font-size: 12px; color: var(--text-gray); margin-bottom: 6px; }
+        .card-value { font-size: 16px; font-weight: bold; color: #fff; }
+        
+        .predict-buttons-row { display: flex; gap: 10px; }
+        .predict-action-btn { flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; color: #fff; transition: 0.2s; }
+        .btn-big { background-color: var(--color-up); } .btn-small { background-color: var(--color-down); }
+        .btn-big.selected, .btn-small.selected { outline: 3px solid #fff; transform: scale(1.05); }
+
+        .badge-output { font-size: 20px; font-weight: bold; margin-top: 6px; display: inline-block; padding: 4px 18px; border-radius: 4px; }
+        .badge-win { background-color: rgba(76, 175, 80, 0.2); color: #4caf50; border: 1px solid #74da9e; }
+        .badge-loss { background-color: rgba(244, 67, 54, 0.2); color: #f44336; border: 1px solid #f79992; }
+
+        .history-container { display: flex; flex-direction: column; flex: 1; border-top: 1px solid var(--border-color); background-color: var(--bg-main); min-height: 250px; }
+        .history-section-title { padding: 10px 12px; margin: 0; background: var(--bg-panel); font-size: 13px; font-weight: bold; color: #fff; text-align: center; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .history-scroll-box { display: flex; flex-direction: column; gap: 6px; padding: 10px; flex-grow: 1; overflow-y: auto; }
+        
+        .history-row-item { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 5px 6px; background: var(--bg-panel); border-radius: 4px; border-left: 3px solid var(--border-color); color: #fff; font-size: 11px; font-family: monospace; white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+        .history-row-item.win { border-left-color: #4caf50; } 
+        .history-row-item.loss { border-left-color: #f44336; }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.1; } }
+        .loader { position: absolute; inset: 0; background: rgba(19, 23, 34, 0.8); display: flex; justify-content: center; align-items: center; z-index: 99; color: var(--color-active); font-weight: bold; font-size: 14px; }
+        input[type="color"] { width: 22px; height: 22px; border: none; border-radius: 4px; cursor: pointer; background: transparent; padding: 0; }
+        input[type="range"] { width: 40px; accent-color: var(--color-active); cursor: pointer; }
+        
+        #export-history-btn {
+            background: rgba(41, 98, 255, 0.2); border: 1px solid var(--color-active); color: #fff; 
+            border-radius: 4px; cursor: pointer; padding: 3px 8px; font-size: 11px; transition: 0.2s;
+        }
+        #export-history-btn:hover { background: var(--color-active); }
+    </style>
+</head>
+<body>
+
+    <div class="top-navbar">
+        <div class="nav-left">
+            <div class="market-live-title"><div class="live-dot"></div> Market Live <span id="timer-text" class="timer-countdown">00s</span></div>
+            <div class="info-badge">Recent: <span id="recent-issue">-----</span></div>
+            <div class="info-badge">Next: <span id="next-issue">-----</span></div>
+            <div class="prediction-box">Forecast: <span class="val-pred pred-wait" id="prediction-val">Analyzing...</span></div>
+            <div class="divider"></div>
+            <div class="btn-group">
+                <button class="nav-btn tf-btn" data-tf="1">Tick</button>
+                <button class="nav-btn tf-btn active" data-tf="60">1M</button>
+                <button class="nav-btn tf-btn" data-tf="300">5M</button>
+                <button class="nav-btn tf-btn" data-tf="900">15M</button>
+            </div>
+            <div class="divider"></div>
+            <div class="btn-group">
+                <button id="tool-select" class="nav-btn draw-mode-btn active">✓</button>
+                <button id="tool-line" class="nav-btn draw-mode-btn">╱</button>
+                <button id="tool-fibo" class="nav-btn draw-mode-btn">⌸</button>
+                <button id="tool-box" class="nav-btn draw-mode-btn">⬜</button>
+            </div>
+            <input type="color" id="draw-color" value="#2962ff" title="အရောင်ရွေးချယ်ရန်">
+            <input type="range" id="draw-opacity" min="0.1" max="1" step="0.1" value="0.5" title="အလင်းအမှောင် (Opacity)">
+            <button id="tool-clear" class="nav-btn" style="color: var(--color-down);">🗑</button>
+            <div class="divider"></div>
+            
+            <button id="btn-toggle-ma" class="nav-btn active" style="display:flex; align-items:center;">
+                <span id="ma-check" style="margin-right:4px;">☑</span> MA 
+                <span style="font-size:10px; margin-left:4px; color:var(--text-gray);">(S:</span><input type="number" id="ma-param" class="param-input" value="50" onclick="event.stopPropagation();" title="SMA Period"><span style="font-size:10px; color:var(--text-gray);"> E:</span><input type="number" id="ema-param" class="param-input" value="20" onclick="event.stopPropagation();" title="EMA Period"><span style="font-size:10px; color:var(--text-gray);">)</span>
+            </button>
+            <button id="btn-toggle-rsi" class="nav-btn" style="display:flex; align-items:center;">
+                <span id="rsi-check" style="margin-right:4px;">☐</span> RSI 
+                <input type="number" id="rsi-param" class="param-input" value="14" onclick="event.stopPropagation();" title="RSI Period">
+            </button>
+        </div>
+    </div>
+
+    <div class="main-workspace">
+        <div class="left-toolbar">
+            <button id="side-select" class="tool-btn active">🖱</button>
+            <button id="side-line" class="tool-btn">📏</button>
+            <button id="side-fibo" class="tool-btn">📉</button>
+            <button id="side-box" class="tool-btn">⬛</button>
+            <div style="margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;">
+                <div class="divider" style="width: 20px; height: 1px;"></div>
+                <button id="side-clear" class="tool-btn" style="color: var(--color-down);">🗑</button>
+            </div>
+        </div>
+
+        <div class="chart-container-pane" id="chart-wrapper">
+            <div class="main-chart-view" id="main-pane">
+                <div id="chart-div"></div>
+                <svg id="drawing-svg"></svg>
+                
+                <div id="chart-overlay-timer" class="chart-center-overlay-timer">00</div>
+                
+                <div class="tv-zoom-tools">
+                    <button id="zoom-out">−</button>
+                    <button id="zoom-reset" style="font-size: 14px;">↻</button>
+                    <button id="zoom-in">+</button>
+                </div>
+            </div>
+            
+            <div class="rsi-chart-view" id="rsi-pane">
+                <div id="rsi-div"></div>
+            </div>
+            
+            <div class="loader" id="market-loader">စျေးကွက်ဒေတာများကို ဆွဲယူနေပါသည်...</div>
+        </div>
+
+        <div class="digit-trend-sidebar">
+            <div class="trend-header">DIGIT TREND (LAST DIGIT)</div>
+            <div class="trend-matrix-wrapper" id="digit-trend-rows">
+                <svg id="trend-lines-svg"></svg>
+            </div>
+            
+            <div class="history-container">
+                <div class="history-section-title">
+                    <span style="flex-grow: 1; text-align: center; margin-left: 30px;">ခန့်မှန်းမှု မှတ်တမ်း (History)</span>
+                    <button id="export-history-btn" title="မှတ်တမ်းကို JSON ဖိုင်အဖြစ် သိမ်းဆည်းရန်">💾 Save</button>
+                </div>
+                <div class="history-scroll-box" id="prediction-history-list"></div>
+            </div>
+        </div>
+
+        <div class="right-prediction-sidebar">
+            <div class="predict-header">ခန့်မှန်းချက်ဘောင် (Prediction)</div>
+            <div class="predict-body">
+                
+                <div class="predict-card" style="border-color: #ff9800; background: rgba(255, 152, 0, 0.05);">
+                    <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
+                        <span class="card-title" style="color: #ff9800; font-weight: bold; margin:0;">AUTO PREDICT (AI)</span>
+                        <select id="auto-predict-source" style="background: #131722; color: #fff; border: 1px solid #2b313f; border-radius: 4px; font-size: 11px; padding: 2px; outline: none; cursor: pointer;">
+                            <option value="forecast">Pattern Forecast</option>
+                            <option value="math">Math Logic (1st+4th)</option>
+                        </select>
+                    </div>
+                    <div class="card-value" id="ai-brain-pred" style="color: #ff9800; font-size: 18px;">Syncing...</div>
+                    <div style="font-size: 11px; color: var(--text-gray); margin-top: 4px;" id="ai-brain-status">Connecting Backend...</div>
+                </div>
+
+                <div class="predict-card">
+                    <div class="card-title">နောက်ဆုံးထွက်ထားသည့် Issue</div>
+                    <div class="card-value" id="panel-last-issue">----</div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="font-size: 12px; font-weight: bold; color: #fff;">Manual Forecast (ရွေးချယ်ရန်):</div>
+                    <div class="predict-buttons-row">
+                        <button id="btn-predict-b" class="predict-action-btn btn-big">အကြီး (B)</button>
+                        <button id="btn-predict-s" class="predict-action-btn btn-small">အငယ် (S)</button>
+                    </div>
+                </div>
+
+                <div class="predict-card" style="min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                    <div class="card-title">သင်၏ခန့်မှန်းချက် ရလဒ်</div>
+                    <div id="prediction-result-display">
+                        <div class="card-value" style="color: var(--text-gray); font-size: 13px;">မရွေးချယ်ရသေးပါ</div>
+                    </div>
+                </div>
+                <div class="predict-card" style="display: flex; flex-direction: column; gap: 8px; border-color: #2196f3; background: rgba(33, 150, 243, 0.02);">
+                    <div class="card-title" style="color: #2196f3; font-weight: bold; text-transform: uppercase;">Digit Sequence History (3 → 1)</div>
+                    <div id="digit-sequence-history-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 160px; overflow-y: auto; padding: 2px;">
+                        <div style="color: var(--text-gray); font-size: 11px; text-align:center;">ဒေတာ စောင့်ဆိုင်းနေပါသည်...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- PREDICTION STATE MANAGER ---
+        window.livePredictions = { forecast: null, math: null };
+
+        // --- 1. CHART INITIALIZATION ---
+        const chartWrapper = document.getElementById('chart-wrapper');
+        const mainPane = document.getElementById('main-pane');
+        const rsiPane = document.getElementById('rsi-pane');
+        const chartDiv = document.getElementById('chart-div');
+        const rsiDiv = document.getElementById('rsi-div');
+        
+        let dataStorageMap = new Map();
+        const rawDateCache = new Map();
+        let currentTimeframe = 60;
+        let isInitialLoad = true; 
+
+        let maVisible = true;
+        let rsiVisible = false;
+        let globalLatestCandles = [];
+        let userPrediction = null;
+        let lastProcessedIssue = null;
+        let globalDigitHistory = []; 
+
+        const DIGIT_COLORS = {
+            0: '#580d9e', 5: '#580d9e',
+            1: '#2a8318', 3: '#2a8318', 7: '#2a8318', 9: '#2a8318',
+            2: '#d40707', 4: '#d40707', 6: '#d40707', 8: '#d40707'
+        };
+
+        const standardChartOptions = { layout: { background: { type: 'solid', color: '#131722' }, textColor: '#b2b5be' }, grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } }, crosshair: { mode: LightweightCharts.CrosshairMode.Normal }, timeScale: { borderColor: '#2b313f', timeVisible: true, rightOffset: 12 } };
+        
+        const mainChart = LightweightCharts.createChart(chartDiv, { ...standardChartOptions, rightPriceScale: { borderColor: '#2b313f', autoScale: true } });
+        const candleSeries = mainChart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
+        const smaLineSeries = mainChart.addLineSeries({ color: '#ff9800', lineWidth: 2, title: 'SMA' });
+        const emaLineSeries = mainChart.addLineSeries({ color: '#2962ff', lineWidth: 2, title: 'EMA' });
+
+        const rsiChart = LightweightCharts.createChart(rsiDiv, { ...standardChartOptions, rightPriceScale: { borderColor: '#2b313f', autoScale: true } });
+        const rsiSeries = rsiChart.addLineSeries({ color: '#2962ff', lineWidth: 2 });
+        const rsiSignalSeries = rsiChart.addLineSeries({ color: '#ffeb3b', lineWidth: 1.5 });
+        
+        rsiSeries.createPriceLine({ price: 70, color: '#f44336', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed });
+        rsiSeries.createPriceLine({ price: 50, color: '#787b86', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted });
+        rsiSeries.createPriceLine({ price: 30, color: '#4caf50', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed });
+
+        new ResizeObserver(entries => {
+            if (entries.length === 0 || entries[0].target !== chartWrapper) return;
+            const newRect = entries[0].contentRect;
+            if (rsiVisible) {
+                mainChart.resize(newRect.width, newRect.height * 0.7);
+                rsiChart.resize(newRect.width, newRect.height * 0.3);
+            } else {
+                mainChart.resize(newRect.width, newRect.height);
+            }
+        }).observe(chartWrapper);
+
+        function calculateSMA(data, period) {
+            let res = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) continue;
+                let sum = 0;
+                for (let j = 0; j < period; j++) { 
+                    let val = data[i - j].close !== undefined ? data[i - j].close : data[i - j].value;
+                    sum += val; 
+                }
+                res.push({ time: data[i].time, value: sum / period });
+            }
+            return res;
+        }
+
+        function calculateEMA(data, period) {
+            let res = [];
+            if(data.length < period) return res;
+            let k = 2 / (period + 1);
+            let ema = 0;
+            for(let i=0; i<period; i++) ema += data[i].close;
+            ema = ema / period;
+            res.push({time: data[period-1].time, value: ema});
+            
+            for(let i=period; i<data.length; i++){
+                ema = (data[i].close - ema) * k + ema;
+                res.push({time: data[i].time, value: ema});
+            }
+            return res;
+        }
+
+        function calculateRSI(data, period) {
+            let res = [];
+            if(data.length < period) return res;
+            let gains = 0, losses = 0;
+            for(let i = 1; i <= period; i++) {
+                let diff = data[i].close - data[i-1].close;
+                if(diff >= 0) gains += diff; else losses -= diff;
+            }
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+            
+            for(let i = period; i < data.length; i++) {
+                if(i > period) {
+                    let diff = data[i].close - data[i-1].close;
+                    let gain = diff >= 0 ? diff : 0;
+                    let loss = diff < 0 ? -diff : 0;
+                    avgGain = (avgGain * (period - 1) + gain) / period;
+                    avgLoss = (avgLoss * (period - 1) + loss) / period;
+                }
+                let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+                let rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + rs));
+                res.push({ time: data[i].time, value: rsi });
+            }
+            return res;
+        }
+
+        const btnToggleMa = document.getElementById('btn-toggle-ma');
+        const maParamInput = document.getElementById('ma-param');
+        const emaParamInput = document.getElementById('ema-param');
+        const maCheck = document.getElementById('ma-check');
+
+        function updateMAs() {
+            if(globalLatestCandles.length > 0) {
+                let sP = parseInt(maParamInput.value) || 50;
+                let eP = parseInt(emaParamInput.value) || 20;
+                smaLineSeries.setData(calculateSMA(globalLatestCandles, sP));
+                emaLineSeries.setData(calculateEMA(globalLatestCandles, eP));
+            }
+        }
+
+        btnToggleMa.onclick = () => {
+            maVisible = !maVisible;
+            btnToggleMa.classList.toggle('active', maVisible);
+            maCheck.innerText = maVisible ? '☑' : '☐';
+            smaLineSeries.applyOptions({ visible: maVisible });
+            emaLineSeries.applyOptions({ visible: maVisible });
+        };
+        maParamInput.addEventListener('change', updateMAs);
+        emaParamInput.addEventListener('change', updateMAs);
+
+        const btnToggleRsi = document.getElementById('btn-toggle-rsi');
+        const rsiParamInput = document.getElementById('rsi-param');
+        const rsiCheck = document.getElementById('rsi-check');
+
+        function updateRSI() {
+            if(globalLatestCandles.length > 0) {
+                let p = parseInt(rsiParamInput.value) || 14;
+                let rsiData = calculateRSI(globalLatestCandles, p);
+                rsiSeries.setData(rsiData);
+                if(rsiData.length > 0) rsiSignalSeries.setData(calculateSMA(rsiData, 9));
+            }
+        }
+
+        btnToggleRsi.onclick = () => {
+            rsiVisible = !rsiVisible;
+            btnToggleRsi.classList.toggle('active', rsiVisible);
+            rsiCheck.innerText = rsiVisible ? '☑' : '☐';
+            
+            if (rsiVisible) {
+                rsiPane.style.display = 'block'; rsiPane.style.height = '30%'; mainPane.style.height = '70%';
+            } else {
+                rsiPane.style.display = 'none'; rsiPane.style.height = '0%'; mainPane.style.height = '100%';
+            }
+            let rect = chartWrapper.getBoundingClientRect();
+            if(rsiVisible) {
+                mainChart.resize(rect.width, rect.height * 0.7); rsiChart.resize(rect.width, rect.height * 0.3);
+            } else {
+                mainChart.resize(rect.width, rect.height);
+            }
+        };
+        rsiParamInput.addEventListener('change', updateRSI);
+
+        // --- 2. DIGIT TREND 0-9 MATRIX ENGINE ---
+        function renderDigitBalls(digitHistoryArr) {
+            const container = document.getElementById('digit-trend-rows');
+            if (!container) return;
+            
+            container.innerHTML = '<svg id="trend-lines-svg"></svg>';
+            let svgLine = document.getElementById('trend-lines-svg');
+
+            if (digitHistoryArr.length === 0) return;
+
+            let headerDiv = document.createElement('div');
+            headerDiv.className = 'trend-grid-header';
+            for (let h = 0; h <= 9; h++) {
+                let s = document.createElement('span'); s.innerText = h; headerDiv.appendChild(s);
+            }
+            container.appendChild(headerDiv);
+
+            let recent10 = digitHistoryArr.slice(-10).reverse();
+            for (let rowIdx = 0; rowIdx < 10; rowIdx++) {
+                let rowDiv = document.createElement('div');
+                rowDiv.className = 'trend-row-line';
+                let dataObj = recent10[rowIdx];
+                
+                for (let i = 0; i <= 9; i++) {
+                    let slot = document.createElement('div'); slot.className = 'trend-cell-slot';
+                    if (dataObj && i === dataObj.digit) {
+                        let activeDot = document.createElement('div');
+                        activeDot.className = 'trend-dot-active'; activeDot.innerText = i; activeDot.id = `active-cell-${rowIdx}`;
+                        
+                        let colorClass = 'glow-green';
+                        if (dataObj.color === 'VIOLET' || i === 0 || i === 5) colorClass = 'glow-violet';
+                        else if (dataObj.color === 'RED' || i % 2 === 0) colorClass = 'glow-red';
+                        
+                        activeDot.classList.add(colorClass); slot.appendChild(activeDot);
+                    } else {
+                        let inactiveDot = document.createElement('div'); inactiveDot.className = 'trend-dot-inactive'; slot.appendChild(inactiveDot);
+                    }
+                    rowDiv.appendChild(slot);
+                }
+                container.appendChild(rowDiv);
+            }
+
+            setTimeout(() => {
+                let points = []; let containerRect = container.getBoundingClientRect();
+                for (let i = 0; i < 10; i++) {
+                    let cell = document.getElementById(`active-cell-${i}`);
+                    if (cell) {
+                        let rect = cell.getBoundingClientRect();
+                        points.push(`${(rect.left - containerRect.left) + (rect.width / 2)},${(rect.top - containerRect.top) + (rect.height / 2)}`);
+                    }
+                }
+                if (points.length > 1) {
+                    let polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+                    polyline.setAttribute('points', points.join(' ')); polyline.setAttribute('fill', 'none');
+                    polyline.setAttribute('stroke', 'rgba(255, 255, 255, 0.4)'); polyline.setAttribute('stroke-width', '1.0');
+                    svgLine.appendChild(polyline);
+                }
+            }, 50);
+        }
+
+        // --- 3. PREDICTION HISTORY & ENGINE ---
+        const bPredictorBtn = document.getElementById('btn-predict-b');
+        const sPredictorBtn = document.getElementById('btn-predict-s');
+        const outcomeScreenBox = document.getElementById('prediction-result-display'); 
+        const loggerUiCollection = document.getElementById('prediction-history-list');
+        const autoPredictSourceSelect = document.getElementById('auto-predict-source');
+        
+        bPredictorBtn.onclick = () => saveUserIntentionState('B');
+        sPredictorBtn.onclick = () => saveUserIntentionState('S');
+        autoPredictSourceSelect.addEventListener('change', refreshActivePredictorUI);
+        
+        document.getElementById('export-history-btn').onclick = () => {
+            let historyStr = localStorage.getItem('tradingHistory') || '[]';
+            let blob = new Blob([historyStr], { type: "application/json" });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = `Prediction_History_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        function saveUserIntentionState(symbolCode) {
+            userPrediction = symbolCode;
+            bPredictorBtn.classList.toggle('selected', symbolCode === 'B'); sPredictorBtn.classList.toggle('selected', symbolCode === 'S');
+            outcomeScreenBox.innerHTML = `<div class="card-value" style="color: ${symbolCode === 'B' ? 'var(--color-up)' : 'var(--color-down)'}">ခန့်မှန်းချက်: ${symbolCode === 'B' ? 'အကြီး (B)' : 'အငယ် (S)'}</div>`;
+        }
+        
+        function saveHistoryToLocal(newEntry) {
+            let history = JSON.parse(localStorage.getItem('tradingHistory') || '[]');
+            if (history.some(row => row.fullIssue === newEntry.fullIssue)) {
+                return; 
+            }
+            history.unshift(newEntry); if (history.length > 200) history = history.slice(0, 200); 
+            localStorage.setItem('tradingHistory', JSON.stringify(history)); renderHistoryLogsUI();
+        }
+        
+        function renderHistoryLogsUI() {
+            loggerUiCollection.innerHTML = '';
+            let history = JSON.parse(localStorage.getItem('tradingHistory') || '[]');
+            history.forEach(row => {
+                let div = document.createElement('div'); 
+                div.className = `history-row-item ${row.status === 'WIN' ? 'win' : 'loss'}`; 
+                
+                let modeTxt = row.mode === 'Auto' ? `<span style="color:#ff9800; font-weight:bold;">[A]</span>` : `<span style="color:#2196f3; font-weight:bold;">[M]</span>`;
+                let statusCol = row.status === 'WIN' ? '#4caf50' : '#ef5350';
+                let resCol = row.actual === 'B' ? '#f58608' : '#26a69a'; 
+                let predCol = row.predict === 'B' ? '#f58608' : '#26a69a';
+
+                div.innerHTML = `<span>#${parseInt(row.issue)}</span>${modeTxt}<span>P:<b style="color:${predCol};">${row.predict}</b></span><b style="color:${statusCol};">${row.status}</b><span>R:<b style="color:${resCol};">${row.actual}</b></span>`;
+                loggerUiCollection.appendChild(div);
+            });
+        }
+
+        function refreshActivePredictorUI() {
+            const aiBox = document.getElementById('ai-brain-pred');
+            const aiStatus = document.getElementById('ai-brain-status');
+            const forecastEl = document.getElementById('prediction-val');
+            const source = autoPredictSourceSelect.value;
+
+            let activePred = window.livePredictions[source];
+
+            if (activePred && activePred.prediction) {
+                aiBox.innerText = activePred.display;
+                aiBox.style.color = activePred.prediction === 'B' ? 'var(--color-up)' : 'var(--color-down)';
+                aiStatus.innerText = activePred.status || "Ready";
+
+                forecastEl.innerText = activePred.display;
+                forecastEl.className = `val-pred ${activePred.prediction === 'B' ? 'pred-big' : 'pred-small'}`;
+
+                let nextIssueLabel = document.getElementById('next-issue').innerText;
+                if (nextIssueLabel && nextIssueLabel !== '-----') {
+                    window.aiPredictionsCache = window.aiPredictionsCache || {};
+                    window.aiPredictionsCache[nextIssueLabel] = activePred.prediction;
+                }
+            } else {
+                aiBox.innerText = "Analyzing...";
+                aiBox.style.color = "#ff9800";
+                aiStatus.innerText = "Waiting for data...";
+                
+                forecastEl.innerText = "Analyzing Trend..."; 
+                forecastEl.className = "val-pred pred-wait";
+            }
+        }
+        
+        function verifySequenceEngine(activeNode) {
+            if (!activeNode) return;
+            const liveBsResult = activeNode["B/S"]; 
+            const clippedIssue = parseInt(activeNode.issue.slice(-5));
+            
+            if (!lastProcessedIssue) { 
+                lastProcessedIssue = activeNode.issue; 
+                document.getElementById('panel-last-issue').innerText = `${clippedIssue} (${liveBsResult})`; 
+                return; 
+            }
+            
+            if (activeNode.issue !== lastProcessedIssue) {
+                let historyForCheck = JSON.parse(localStorage.getItem('tradingHistory') || '[]');
+                
+                if (!historyForCheck.some(row => row.fullIssue === activeNode.issue)) {
+                    let executionFlag = "NONE";
+                    let issueToEvaluate = activeNode.issue.slice(-5);
+                    let finalPredict = null;
+                    let predMode = "";
+
+                    if (userPrediction !== null) { finalPredict = userPrediction; predMode = "Manual"; } 
+                    else if (window.aiPredictionsCache && window.aiPredictionsCache[issueToEvaluate]) { finalPredict = window.aiPredictionsCache[issueToEvaluate]; predMode = "Auto"; }
+
+                    if (finalPredict !== null) {
+                        executionFlag = (finalPredict === liveBsResult) ? "WIN" : "LOSS";
+                        outcomeScreenBox.innerHTML = `<div class="badge-output ${executionFlag === 'WIN' ? 'badge-win' : 'badge-loss'}">${executionFlag}</div>`;
+                        
+                        saveHistoryToLocal({ 
+                            fullIssue: activeNode.issue, 
+                            issue: issueToEvaluate, 
+                            predict: finalPredict, 
+                            actual: liveBsResult, 
+                            status: executionFlag, 
+                            mode: predMode 
+                        });
+                    } else { 
+                        outcomeScreenBox.innerHTML = `<div class="card-value" style="color:var(--text-gray); font-size:13px;">မရွေးချယ်ရသေးပါ</div>`;
+                    }
+                    
+                    userPrediction = null; bPredictorBtn.classList.remove('selected'); sPredictorBtn.classList.remove('selected');
+                }
+                lastProcessedIssue = activeNode.issue;
+                document.getElementById('panel-last-issue').innerText = `${clippedIssue} (${liveBsResult})`;
+            }
+        }
+
+        function calculatePatternForecast(digitsArr) {
+            if (!digitsArr || digitsArr.length < 4) return null;
+            const len = digitsArr.length;
+            const bsArr = digitsArr.map(d => d >= 5 ? 'B' : 'S');
+            const pat1 = bsArr[len - 3], pat2 = bsArr[len - 2], pat3 = bsArr[len - 1];
+            
+            let countB = 0, countS = 0;
+            for (let i = 0; i <= bsArr.length - 4; i++) {
+                if (bsArr[i] === pat1 && bsArr[i + 1] === pat2 && bsArr[i + 2] === pat3) {
+                    if (bsArr[i + 3] === 'B') countB++; else countS++;
+                }
+            }
+
+            let total = countB + countS;
+            if (total > 0) {
+                let predBS = countB > countS ? 'B' : (countS > countB ? 'S' : 'B'); 
+                let acc = Math.round((Math.max(countB, countS) / total) * 100);
+                let txt = predBS === 'B' ? 'အကြီး (B)' : 'အငယ် (S)';
+                return { prediction: predBS, display: `${txt} [Pattern] (${acc}%)`, status: `Pattern Based: ${pat1}${pat2}${pat3}` };
+            }
+            return null;
+        }
+
+        function calculateMathForecast(digitsArr) {
+            if (!digitsArr || digitsArr.length < 4) return null;
+            let len = digitsArr.length;
+            let d1 = digitsArr[len - 1]; // Newest 1st
+            let d4 = digitsArr[len - 5]; // 4th
+            
+            let sum = d1 + d4;
+            let lastDigit = sum % 10;
+            
+            let predBS = (lastDigit >= 5) ? 'B' : 'S';
+            let txt = predBS === 'B' ? 'အကြီး (B)' : 'အငယ် (S)';
+            
+            return { prediction: predBS, display: `${txt} [Math]`, status: `Logic: ${d1} + ${d4} = ${sum} ➔ ${lastDigit}` };
+        }
+
+        function getDigitBadge(digit) {
+            let color = DIGIT_COLORS[digit] || '#78909c';
+            return `<span style="display:inline-block; width:18px; height:18px; line-height:18px; text-align:center; border-radius:50%; background-color:${color}; color:#fff; font-weight:bold; margin:0 2px; box-shadow: 0 0 5px ${color};">${digit}</span>`;
+        }
+
+        function renderDigitSequenceHistory(digitsArr) {
+            const container = document.getElementById('digit-sequence-history-list');
+            if (!container || digitsArr.length < 4) return;
+            container.innerHTML = '';
+            let rowCount = 0;
+
+            for (let i = digitsArr.length - 1; i >= 3; i--) {
+                if (rowCount >= 300) break;
+
+                let nextDigit = digitsArr[i];     
+                let d3 = digitsArr[i - 1];        
+                let d2 = digitsArr[i - 2];        
+                let d1 = digitsArr[i - 3];        
+
+                let rowDiv = document.createElement('div');
+                rowDiv.style.display = 'flex';
+                rowDiv.style.justifyContent = 'space-between';
+                rowDiv.style.alignItems = 'center';
+                rowDiv.style.background = '#171a26';
+                rowDiv.style.padding = '5px 8px';
+                rowDiv.style.borderRadius = '4px';
+                rowDiv.style.borderLeft = `3px solid ${DIGIT_COLORS[nextDigit] || '#78909c'}`;
+                
+                rowDiv.innerHTML = `
+                    <div style="display:flex; align-items:center;">
+                        <span style="color:var(--text-gray); font-size:11px; margin-right:6px;">Pat:</span>
+                        ${getDigitBadge(d1)}${getDigitBadge(d2)}${getDigitBadge(d3)}
+                    </div>
+                    <div style="display:flex; align-items:center; font-size:13px;">
+                        <span style="color:var(--text-gray); margin-right:4px;">➔</span>
+                        ${getDigitBadge(nextDigit)}
+                    </div>
+                `;
+                container.appendChild(rowDiv);
+                rowCount++;
+            }
+        }
+
+        async function fireAPIConnectionPipeline(skipFetch = false) {
+            const dataEndpoint = 'https://nay0079.pythonanywhere.com/api/json';
+            try {
+                if (!skipFetch) {
+                    let feedbackStream = await fetch(dataEndpoint + "?nocache=" + new Date().getTime());
+                    let parsedPayload = await feedbackStream.json();
+                    
+                    let targetIssueKey = ""; let activeNodeData = null;
+                    let localHistoryCollector = [];
+                    let fullItemsList = [];
+
+                    parsedPayload.forEach(item => {
+                        if (!item.issue || !item.time) return;
+                        
+                        let cacheKey = item.issue + '_' + item.time; let compiledUnix;
+                        if (rawDateCache.has(cacheKey)) { compiledUnix = rawDateCache.get(cacheKey); } 
+                        else {
+                            let yr = item.issue.substring(0, 4), mn = item.issue.substring(4, 6), dy = item.issue.substring(6, 8);
+                            compiledUnix = Math.floor(new Date(`${yr}-${mn}-${dy}T${item.time}Z`).getTime() / 1000);
+                            rawDateCache.set(cacheKey, compiledUnix);
+                        }
+
+                        let digit = null;
+                        if (item.last_digit !== undefined && item.last_digit !== null) digit = parseInt(item.last_digit);
+                        else if (item.number !== undefined) digit = parseInt(item.number.toString().slice(-1));
+                        else if (item.price !== undefined) digit = parseInt(item.price.toString().replace('.', '').slice(-1)); 
+                        
+                        if (digit !== null && !isNaN(digit)) localHistoryCollector.push({ issue: item.issue, digit: digit, color: item.color, time: compiledUnix || 0 });
+                        if (!isNaN(compiledUnix)) {
+                            dataStorageMap.set(compiledUnix, { ...item, parsedTime: compiledUnix });
+                            fullItemsList.push({ ...item, parsedTime: compiledUnix });
+                        }
+                    });
+
+                    if (fullItemsList.length > 0) {
+                        fullItemsList.sort((a, b) => {
+                            if (a.parsedTime !== b.parsedTime) return a.parsedTime - b.parsedTime;
+                            return a.issue.localeCompare(b.issue);
+                        });
+                        activeNodeData = fullItemsList[fullItemsList.length - 1];
+                        targetIssueKey = activeNodeData.issue;
+                    }
+
+                    if (targetIssueKey) {
+                        let formattedIssueNum = parseInt(targetIssueKey.slice(-5));
+                        document.getElementById('recent-issue').innerText = formattedIssueNum;
+                        document.getElementById('next-issue').innerText = formattedIssueNum + 1;
+                        verifySequenceEngine(activeNodeData);
+
+                        localHistoryCollector.sort((a, b) => {
+                            if (a.time !== b.time) return a.time - b.time;
+                            if (a.issue.length !== b.issue.length) return a.issue.length - b.issue.length;
+                            return a.issue.localeCompare(b.issue);
+                        });
+                        
+                        let finalDigits = localHistoryCollector.slice(-40); 
+                        renderDigitBalls(finalDigits);
+
+                        globalDigitHistory = finalDigits.map(item => item.digit);
+                        renderDigitSequenceHistory(globalDigitHistory);
+                        
+                        window.livePredictions.forecast = calculatePatternForecast(globalDigitHistory);
+                        window.livePredictions.math = calculateMathForecast(globalDigitHistory);
+                        refreshActivePredictorUI();
+                    }
+                }
+
+                if (dataStorageMap.size === 0) return;
+                let sortedTimelineList = Array.from(dataStorageMap.values()).sort((a,b) => a.parsedTime - b.parsedTime);
+                let groupedBuckets = new Map(); let algorithmicPriceBasis = 100.0;
+                
+                sortedTimelineList.forEach(node => {
+                    let priceFloor = algorithmicPriceBasis;
+                    let priceCeiling = node["B/S"] === "B" ? priceFloor + 1.2 : (node["B/S"] === "S" ? priceFloor - 1.2 : priceFloor);
+                    if (priceFloor === priceCeiling) return; algorithmicPriceBasis = priceCeiling;
+                    
+                    let bucketIntervalId = Math.floor(node.parsedTime / currentTimeframe) * currentTimeframe;
+                    if (!groupedBuckets.has(bucketIntervalId)) { 
+                        groupedBuckets.set(bucketIntervalId, { time: bucketIntervalId, open: priceFloor, high: Math.max(priceFloor, priceCeiling), low: Math.min(priceFloor, priceCeiling), close: priceCeiling }); 
+                    } else { 
+                        let activeRecord = groupedBuckets.get(bucketIntervalId); 
+                        activeRecord.high = Math.max(activeRecord.high, Math.max(priceFloor, priceCeiling)); 
+                        activeRecord.low = Math.min(activeRecord.low, Math.min(priceFloor, priceCeiling)); 
+                        activeRecord.close = priceCeiling; 
+                    }
+                });
+
+                let unifiedCandlesticks = Array.from(groupedBuckets.values()).map(c => ({ time: c.time, open: c.open, high: c.high + 0.3, low: c.low - 0.3, close: c.close }));
+                
+                if (unifiedCandlesticks.length > 0) {
+                    globalLatestCandles = unifiedCandlesticks;
+                    try {
+                        if (isInitialLoad) { candleSeries.setData(unifiedCandlesticks); isInitialLoad = false; } 
+                        else { 
+                            if (unifiedCandlesticks.length > 1) { candleSeries.update(unifiedCandlesticks[unifiedCandlesticks.length - 2]); } 
+                            candleSeries.update(unifiedCandlesticks[unifiedCandlesticks.length - 1]); 
+                        }
+                    } catch (e) {
+                        candleSeries.setData(unifiedCandlesticks); 
+                    }
+
+                    updateMAs();
+                    updateRSI();
+                }
+                document.getElementById('market-loader').style.display = 'none';
+
+            } catch (err) { 
+                console.error("Connection Error", err); 
+                document.getElementById('market-loader').style.display = 'none'; 
+            }
+        }
+
+        const svg = document.getElementById('drawing-svg');
+        let currentDrawMode = 'select';
+        let isDrawing = false, activeShape = null, startX = 0, startY = 0;
+        let draggedElement = null;
+        let dragOffsetX = 0, dragOffsetY = 0;
+
+        function setDrawMode(mode) {
+            currentDrawMode = mode;
+            document.querySelectorAll('.draw-mode-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            
+            if(mode === 'select') { document.getElementById('tool-select').classList.add('active'); document.getElementById('side-select').classList.add('active'); }
+            if(mode === 'line') { document.getElementById('tool-line').classList.add('active'); document.getElementById('side-line').classList.add('active'); }
+            if(mode === 'box') { document.getElementById('tool-box').classList.add('active'); document.getElementById('side-box').classList.add('active'); }
+            if(mode === 'fibo') { document.getElementById('tool-fibo').classList.add('active'); document.getElementById('side-fibo').classList.add('active'); }
+            
+            svg.style.pointerEvents = mode === 'select' ? 'none' : 'all'; 
+        }
+
+        document.getElementById('tool-select').onclick = () => setDrawMode('select');
+        document.getElementById('side-select').onclick = () => setDrawMode('select');
+        document.getElementById('tool-line').onclick = () => setDrawMode('line');
+        document.getElementById('side-line').onclick = () => setDrawMode('line');
+        document.getElementById('tool-box').onclick = () => setDrawMode('box');
+        document.getElementById('side-box').onclick = () => setDrawMode('box');
+        document.getElementById('tool-fibo').onclick = () => setDrawMode('fibo');
+        document.getElementById('side-fibo').onclick = () => setDrawMode('fibo');
+        
+        const clearDrawing = () => { svg.innerHTML = ''; };
+        document.getElementById('tool-clear').onclick = clearDrawing;
+        document.getElementById('side-clear').onclick = clearDrawing;
+
+        const onDragMove = (e) => {
+            if (draggedElement) {
+                let tx = e.clientX - dragOffsetX;
+                let ty = e.clientY - dragOffsetY;
+                draggedElement.transform.baseVal.getItem(0).setTranslate(tx, ty);
+            }
+        };
+
+        const onDragEnd = () => {
+            if (draggedElement) {
+                draggedElement.style.cursor = 'pointer';
+                draggedElement = null;
+            }
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragEnd);
+        };
+
+        svg.addEventListener('mousedown', (e) => {
+            if (currentDrawMode === 'select') {
+                if (e.target !== svg) {
+                    draggedElement = e.target.closest('g') || e.target;
+                    let transforms = draggedElement.transform.baseVal;
+                    let tx = 0, ty = 0;
+                    if (transforms.length > 0 && transforms.getItem(0).type === SVGTransform.SVG_TRANSFORM_TRANSLATE) {
+                        tx = transforms.getItem(0).matrix.e; ty = transforms.getItem(0).matrix.f;
+                    } else {
+                        let translate = svg.createSVGTransform(); translate.setTranslate(0, 0); draggedElement.transform.baseVal.insertItemBefore(translate, 0);
+                    }
+                    dragOffsetX = e.clientX - tx; dragOffsetY = e.clientY - ty;
+                    draggedElement.style.cursor = 'grabbing';
+                    document.addEventListener('mousemove', onDragMove); document.addEventListener('mouseup', onDragEnd);
+                }
+                return;
+            }
+
+            isDrawing = true;
+            const rect = svg.getBoundingClientRect();
+            startX = e.clientX - rect.left; startY = e.clientY - rect.top;
+            let color = document.getElementById('draw-color').value;
+            let opacity = document.getElementById('draw-opacity').value;
+
+            if (currentDrawMode === 'line') {
+                activeShape = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                activeShape.setAttribute('x1', startX); activeShape.setAttribute('y1', startY);
+                activeShape.setAttribute('x2', startX); activeShape.setAttribute('y2', startY);
+                activeShape.setAttribute('stroke', color); activeShape.setAttribute('stroke-width', '2');
+                activeShape.setAttribute('opacity', opacity);
+            } else if (currentDrawMode === 'box') {
+                activeShape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                activeShape.setAttribute('x', startX); activeShape.setAttribute('y', startY);
+                activeShape.setAttribute('fill', color); activeShape.setAttribute('opacity', opacity);
+            } else if (currentDrawMode === 'fibo') {
+                activeShape = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                activeShape.dataset.startY = startY; activeShape.dataset.startX = startX;
+            }
+            if(activeShape) svg.appendChild(activeShape);
+        });
+
+        svg.addEventListener('mousemove', (e) => {
+            if (currentDrawMode === 'select') return;
+            if (!isDrawing || !activeShape) return;
+            const rect = svg.getBoundingClientRect();
+            let curX = e.clientX - rect.left; let curY = e.clientY - rect.top;
+            
+            if (currentDrawMode === 'line') {
+                activeShape.setAttribute('x2', curX); activeShape.setAttribute('y2', curY);
+            } else if (currentDrawMode === 'box') {
+                activeShape.setAttribute('x', Math.min(startX, curX)); activeShape.setAttribute('y', Math.min(startY, curY));
+                activeShape.setAttribute('width', Math.abs(curX - startX)); activeShape.setAttribute('height', Math.abs(curY - startY));
+            } else if (currentDrawMode === 'fibo') {
+                activeShape.innerHTML = ''; 
+                let sY = parseFloat(activeShape.dataset.startY); let eY = curY;
+                let levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+                let colors = ['#787b86', '#f44336', '#81c784', '#4caf50', '#009688', '#64b5f6', '#787b86'];
+                let diff = eY - sY;
+                
+                levels.forEach((lvl, idx) => {
+                    let y = sY + (diff * lvl);
+                    let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', '0'); line.setAttribute('x2', '100%');
+                    line.setAttribute('y1', y); line.setAttribute('y2', y);
+                    line.setAttribute('stroke', colors[idx]); line.setAttribute('stroke-width', '1');
+                    line.setAttribute('stroke-dasharray', '4,4'); activeShape.appendChild(line);
+
+                    let text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', startX + 5); text.setAttribute('y', y - 5);
+                    text.setAttribute('fill', colors[idx]); text.setAttribute('font-size', '12px');
+                    text.textContent = (lvl * 100).toFixed(1) + '%'; activeShape.appendChild(text);
+                });
+            }
+        });
+
+        svg.addEventListener('mouseup', () => { 
+            if (currentDrawMode === 'select') return;
+            isDrawing = false; activeShape = null; 
+        });
+
+        // --- ZOOM BUTTONS ---
+        document.getElementById('zoom-in').onclick = () => {
+            let currentSpacing = mainChart.timeScale().options().barSpacing;
+            mainChart.timeScale().applyOptions({ barSpacing: currentSpacing * 1.2 });
+        };
+        document.getElementById('zoom-out').onclick = () => {
+            let currentSpacing = mainChart.timeScale().options().barSpacing;
+            mainChart.timeScale().applyOptions({ barSpacing: currentSpacing * 0.8 });
+        };
+        document.getElementById('zoom-reset').onclick = () => {
+            mainChart.timeScale().fitContent();
+        };
+
+        document.querySelectorAll('.tf-btn').forEach(button => {
+            button.onclick = (e) => {
+                document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active');
+                currentTimeframe = parseInt(e.target.getAttribute('data-tf')); isInitialLoad = true; document.getElementById('market-loader').style.display = 'flex';
+                setTimeout(() => fireAPIConnectionPipeline(true), 10);
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', renderHistoryLogsUI);
+        fireAPIConnectionPipeline(); 
+        setInterval(() => { fireAPIConnectionPipeline(); }, 2000);
+
+        // --- TIMER SYNC WITH SYSTEM CLOCK ---
+        function syncTimerWithDevice() {
+            let offsetSeconds = 60 - new Date().getSeconds();
+            let displaySeconds = offsetSeconds === 60 ? 0 : offsetSeconds;
+            
+            const timerEl = document.getElementById('timer-text');
+            const overlayTimerEl = document.getElementById('chart-overlay-timer');
+            
+            if (timerEl.innerText !== `${displaySeconds}s`) {
+                timerEl.innerText = `${displaySeconds}s`;
+                timerEl.classList.remove('timer-orange-blink', 'timer-red-blink');
+                
+                if (displaySeconds <= 10 && displaySeconds > 5) { 
+                    timerEl.classList.add('timer-orange-blink'); 
+                    if (overlayTimerEl) {
+                        overlayTimerEl.innerText = displaySeconds;
+                        overlayTimerEl.style.setProperty('display', 'block', 'important');
+                        overlayTimerEl.style.color = 'rgba(255, 165, 0, 0.9)'; 
+                        overlayTimerEl.style.textShadow = '0px 0px 40px rgba(255, 165, 0, 1)';
+                    }
+                } else if (displaySeconds <= 5 && displaySeconds > 0) { 
+                    timerEl.classList.add('timer-red-blink'); 
+                    if (overlayTimerEl) {
+                        overlayTimerEl.innerText = displaySeconds;
+                        overlayTimerEl.style.setProperty('display', 'block', 'important');
+                        overlayTimerEl.style.color = 'rgba(255, 0, 0, 0.9)'; 
+                        overlayTimerEl.style.textShadow = '0px 0px 40px rgba(255, 0, 0, 1)';
+                    }
+                } else {
+                    if (overlayTimerEl) overlayTimerEl.style.setProperty('display', 'none', 'important');
+                }
+            }
+        }
+        
+        setInterval(syncTimerWithDevice, 100);
+
+    </script>
+</body>
+</html>
