@@ -230,9 +230,10 @@
                 
                 <div class="predict-card" style="border-color: #ff9800; background: rgba(255, 152, 0, 0.05);">
                     <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
-                        <span class="card-title" style="color: #ff9800; font-weight: bold; margin:0;">AUTO PREDICT (AI)</span>
-                        <select id="auto-predict-source" style="background: #131722; color: #fff; border: 1px solid #2b313f; border-radius: 4px; font-size: 11px; padding: 2px; outline: none; cursor: pointer;">
-                            <option value="forecast">Pattern Forecast</option>
+                        <span class="card-title" style="color: #ff9800; font-weight: bold; margin:0;">(AI)</span>
+                        <select id="auto-predict-source" style="background: #131722; color: #fff; border: 1px solid #2b313f; border-radius: 4px; font-size: 7px; padding: 2px; outline: none; cursor: pointer;">
+                            <option value="agent">Agent (Streak Logic)</option>
+                            <option value="forecast">Agent (Deep Sequence)</option>
                             <option value="math">Math Logic (1st+4th)</option>
                         </select>
                     </div>
@@ -271,7 +272,7 @@
 
     <script>
         // --- PREDICTION STATE MANAGER ---
-        window.livePredictions = { forecast: null, math: null };
+        window.livePredictions = { agent: null, forecast: null, math: null };
 
         // --- 1. CHART INITIALIZATION ---
         const chartWrapper = document.getElementById('chart-wrapper');
@@ -629,25 +630,124 @@
             }
         }
 
-        function calculatePatternForecast(digitsArr) {
-            if (!digitsArr || digitsArr.length < 4) return null;
-            const len = digitsArr.length;
-            const bsArr = digitsArr.map(d => d >= 5 ? 'B' : 'S');
-            const pat1 = bsArr[len - 3], pat2 = bsArr[len - 2], pat3 = bsArr[len - 1];
+        // --- AI AGENT (STREAK LOGIC) ---
+        function calculateAgentForecast(digitsArr) {
+            if (!digitsArr || digitsArr.length < 5) return null;
             
-            let countB = 0, countS = 0;
-            for (let i = 0; i <= bsArr.length - 4; i++) {
-                if (bsArr[i] === pat1 && bsArr[i + 1] === pat2 && bsArr[i + 2] === pat3) {
-                    if (bsArr[i + 3] === 'B') countB++; else countS++;
+            const bsArr = digitsArr.map(d => d >= 5 ? 'B' : 'S');
+            const len = bsArr.length;
+            
+            let maxDepth = 10; 
+            let prediction = null;
+            let confidence = 0;
+            let matchedPattern = "";
+            let logicStatus = "";
+            
+            for (let depth = maxDepth; depth >= 2; depth--) {
+                if (len <= depth) continue;
+                
+                let currentPattern = bsArr.slice(len - depth).join('');
+                let scoreB = 0;
+                let scoreS = 0;
+                let matchCount = 0;
+                
+                for (let i = 0; i <= len - depth - 1; i++) {
+                    let pastPattern = bsArr.slice(i, i + depth).join('');
+                    
+                    if (pastPattern === currentPattern) {
+                        matchCount++;
+                        let nextOutcome = bsArr[i + depth];
+                        let streakCount = 0;
+                        let j = i + depth;
+                        
+                        while (j < len && bsArr[j] === nextOutcome) {
+                            streakCount++;
+                            j++;
+                        }
+                        
+                        if (nextOutcome === 'B') scoreB += streakCount;
+                        else scoreS += streakCount;
+                    }
+                }
+                
+                let totalScore = scoreB + scoreS;
+                if (matchCount > 0 && totalScore > 0) {
+                    matchedPattern = currentPattern;
+                    if (scoreB > scoreS) {
+                        prediction = 'B';
+                        confidence = Math.round((scoreB / totalScore) * 100);
+                    } else if (scoreS > scoreB) {
+                        prediction = 'S';
+                        confidence = Math.round((scoreS / totalScore) * 100);
+                    } else {
+                        continue; 
+                    }
+                    logicStatus = `Match Depth(${depth}) | Streak Pw: B(${scoreB})-S(${scoreS})`;
+                    break; 
                 }
             }
+            
+            if (prediction) {
+                let txt = prediction === 'B' ? 'အကြီး (B)' : 'အငယ် (S)';
+                return { 
+                    prediction: prediction, 
+                    display: `${txt} [AI Streak] (${confidence}%)`, 
+                    status: logicStatus 
+                };
+            }
+            return null;
+        }
 
-            let total = countB + countS;
-            if (total > 0) {
-                let predBS = countB > countS ? 'B' : (countS > countB ? 'S' : 'B'); 
-                let acc = Math.round((Math.max(countB, countS) / total) * 100);
-                let txt = predBS === 'B' ? 'အကြီး (B)' : 'အငယ် (S)';
-                return { prediction: predBS, display: `${txt} [Pattern] (${acc}%)`, status: `Pattern Based: ${pat1}${pat2}${pat3}` };
+        // --- AI AGENT (DEEP SEQUENCE: 5 down to 2 Markov Chain) ---
+        function calculatePatternForecast(digitsArr) {
+            if (!digitsArr || digitsArr.length < 5) return null;
+            
+            const bsArr = digitsArr.map(d => d >= 5 ? 'B' : 'S');
+            const len = bsArr.length;
+            
+            let maxDepth = 10; 
+            let prediction = null;
+            let confidence = 0;
+            let matchedPattern = "";
+            
+            for (let depth = maxDepth; depth >= 2; depth--) {
+                if (len <= depth) continue;
+                
+                let currentPattern = bsArr.slice(len - depth).join('');
+                let countB = 0;
+                let countS = 0;
+                
+                for (let i = 0; i <= len - depth - 1; i++) {
+                    let pastPattern = bsArr.slice(i, i + depth).join('');
+                    if (pastPattern === currentPattern) {
+                        if (bsArr[i + depth] === 'B') countB++;
+                        else countS++;
+                    }
+                }
+                
+                let totalMatches = countB + countS;
+                if (totalMatches > 0) {
+                    matchedPattern = currentPattern;
+                    if (countB > countS) {
+                        prediction = 'B';
+                        confidence = Math.round((countB / totalMatches) * 100);
+                    } else if (countS > countB) {
+                        prediction = 'S';
+                        confidence = Math.round((countS / totalMatches) * 100);
+                    } else {
+                        continue; // သရေကျနေလျှင် ပိုတိုသော Pattern ကို ထပ်ရှာရန်
+                    }
+                    break; 
+                }
+            }
+            
+            if (prediction) {
+                let txt = prediction === 'B' ? 'အကြီး (B)' : 'အငယ် (S)';
+                return { 
+                    prediction: prediction, 
+                    display: `${txt} [D S] (${confidence}%)`, 
+                    status: `D Match: [${matchedPattern}] ➔ ${prediction}` 
+                };
             }
             return null;
         }
@@ -655,8 +755,8 @@
         function calculateMathForecast(digitsArr) {
             if (!digitsArr || digitsArr.length < 4) return null;
             let len = digitsArr.length;
-            let d1 = digitsArr[len - 1]; // Newest 1st
-            let d4 = digitsArr[len - 5]; // 4th
+            let d1 = digitsArr[len - 1]; 
+            let d4 = digitsArr[len - 5]; 
             
             let sum = d1 + d4;
             let lastDigit = sum % 10;
@@ -710,71 +810,72 @@
             }
         }
 
-        async function fireAPIConnectionPipeline(skipFetch = false) {
+        async function fireAPIConnectionPipeline() {
             const dataEndpoint = 'https://nay0079.pythonanywhere.com/api/json';
             try {
-                if (!skipFetch) {
-                    let feedbackStream = await fetch(dataEndpoint + "?nocache=" + new Date().getTime());
-                    let parsedPayload = await feedbackStream.json();
+                let feedbackStream = await fetch(dataEndpoint + "?nocache=" + new Date().getTime());
+                let parsedPayload = await feedbackStream.json();
+                
+                let targetIssueKey = ""; let activeNodeData = null;
+                let localHistoryCollector = [];
+                let fullItemsList = [];
+
+                parsedPayload.forEach(item => {
+                    if (!item.issue || !item.time) return;
                     
-                    let targetIssueKey = ""; let activeNodeData = null;
-                    let localHistoryCollector = [];
-                    let fullItemsList = [];
+                    let cacheKey = item.issue + '_' + item.time; let compiledUnix;
+                    if (rawDateCache.has(cacheKey)) { compiledUnix = rawDateCache.get(cacheKey); } 
+                    else {
+                        let yr = item.issue.substring(0, 4), mn = item.issue.substring(4, 6), dy = item.issue.substring(6, 8);
+                        compiledUnix = Math.floor(new Date(`${yr}-${mn}-${dy}T${item.time}Z`).getTime() / 1000);
+                        rawDateCache.set(cacheKey, compiledUnix);
+                    }
 
-                    parsedPayload.forEach(item => {
-                        if (!item.issue || !item.time) return;
-                        
-                        let cacheKey = item.issue + '_' + item.time; let compiledUnix;
-                        if (rawDateCache.has(cacheKey)) { compiledUnix = rawDateCache.get(cacheKey); } 
-                        else {
-                            let yr = item.issue.substring(0, 4), mn = item.issue.substring(4, 6), dy = item.issue.substring(6, 8);
-                            compiledUnix = Math.floor(new Date(`${yr}-${mn}-${dy}T${item.time}Z`).getTime() / 1000);
-                            rawDateCache.set(cacheKey, compiledUnix);
-                        }
+                    let digit = null;
+                    if (item.last_digit !== undefined && item.last_digit !== null) digit = parseInt(item.last_digit);
+                    else if (item.number !== undefined) digit = parseInt(item.number.toString().slice(-1));
+                    else if (item.price !== undefined) digit = parseInt(item.price.toString().replace('.', '').slice(-1)); 
+                    
+                    if (digit !== null && !isNaN(digit)) localHistoryCollector.push({ issue: item.issue, digit: digit, color: item.color, time: compiledUnix || 0 });
+                    if (!isNaN(compiledUnix)) {
+                        dataStorageMap.set(compiledUnix, { ...item, parsedTime: compiledUnix });
+                        fullItemsList.push({ ...item, parsedTime: compiledUnix });
+                    }
+                });
 
-                        let digit = null;
-                        if (item.last_digit !== undefined && item.last_digit !== null) digit = parseInt(item.last_digit);
-                        else if (item.number !== undefined) digit = parseInt(item.number.toString().slice(-1));
-                        else if (item.price !== undefined) digit = parseInt(item.price.toString().replace('.', '').slice(-1)); 
-                        
-                        if (digit !== null && !isNaN(digit)) localHistoryCollector.push({ issue: item.issue, digit: digit, color: item.color, time: compiledUnix || 0 });
-                        if (!isNaN(compiledUnix)) {
-                            dataStorageMap.set(compiledUnix, { ...item, parsedTime: compiledUnix });
-                            fullItemsList.push({ ...item, parsedTime: compiledUnix });
-                        }
+                if (fullItemsList.length > 0) {
+                    fullItemsList.sort((a, b) => {
+                        if (a.parsedTime !== b.parsedTime) return a.parsedTime - b.parsedTime;
+                        return a.issue.localeCompare(b.issue);
                     });
+                    activeNodeData = fullItemsList[fullItemsList.length - 1];
+                    targetIssueKey = activeNodeData.issue;
+                }
 
-                    if (fullItemsList.length > 0) {
-                        fullItemsList.sort((a, b) => {
-                            if (a.parsedTime !== b.parsedTime) return a.parsedTime - b.parsedTime;
-                            return a.issue.localeCompare(b.issue);
-                        });
-                        activeNodeData = fullItemsList[fullItemsList.length - 1];
-                        targetIssueKey = activeNodeData.issue;
-                    }
+                if (targetIssueKey) {
+                    let formattedIssueNum = parseInt(targetIssueKey.slice(-5));
+                    document.getElementById('recent-issue').innerText = formattedIssueNum;
+                    document.getElementById('next-issue').innerText = formattedIssueNum + 1;
+                    verifySequenceEngine(activeNodeData);
 
-                    if (targetIssueKey) {
-                        let formattedIssueNum = parseInt(targetIssueKey.slice(-5));
-                        document.getElementById('recent-issue').innerText = formattedIssueNum;
-                        document.getElementById('next-issue').innerText = formattedIssueNum + 1;
-                        verifySequenceEngine(activeNodeData);
+                    localHistoryCollector.sort((a, b) => {
+                        if (a.time !== b.time) return a.time - b.time;
+                        if (a.issue.length !== b.issue.length) return a.issue.length - b.issue.length;
+                        return a.issue.localeCompare(b.issue);
+                    });
+                    
+                    let finalDigits = localHistoryCollector.slice(-50); 
+                    renderDigitBalls(finalDigits);
 
-                        localHistoryCollector.sort((a, b) => {
-                            if (a.time !== b.time) return a.time - b.time;
-                            if (a.issue.length !== b.issue.length) return a.issue.length - b.issue.length;
-                            return a.issue.localeCompare(b.issue);
-                        });
-                        
-                        let finalDigits = localHistoryCollector.slice(-40); 
-                        renderDigitBalls(finalDigits);
-
-                        globalDigitHistory = finalDigits.map(item => item.digit);
-                        renderDigitSequenceHistory(globalDigitHistory);
-                        
-                        window.livePredictions.forecast = calculatePatternForecast(globalDigitHistory);
-                        window.livePredictions.math = calculateMathForecast(globalDigitHistory);
-                        refreshActivePredictorUI();
-                    }
+                    let fullDigitHistory = localHistoryCollector.map(item => item.digit);
+                    globalDigitHistory = fullDigitHistory;
+                    
+                    renderDigitSequenceHistory(fullDigitHistory);
+                    
+                    window.livePredictions.agent = calculateAgentForecast(fullDigitHistory);
+                    window.livePredictions.forecast = calculatePatternForecast(fullDigitHistory);
+                    window.livePredictions.math = calculateMathForecast(fullDigitHistory);
+                    refreshActivePredictorUI();
                 }
 
                 if (dataStorageMap.size === 0) return;
@@ -968,7 +1069,7 @@
             button.onclick = (e) => {
                 document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active');
                 currentTimeframe = parseInt(e.target.getAttribute('data-tf')); isInitialLoad = true; document.getElementById('market-loader').style.display = 'flex';
-                setTimeout(() => fireAPIConnectionPipeline(true), 10);
+                setTimeout(() => fireAPIConnectionPipeline(), 10);
             }
         });
         
@@ -978,7 +1079,10 @@
 
         // --- TIMER SYNC WITH SYSTEM CLOCK ---
         function syncTimerWithDevice() {
-            let offsetSeconds = 60 - new Date().getSeconds();
+            const TIME_OFFSET_SECONDS = 0; 
+            
+            let adjustedDate = new Date(new Date().getTime() + (TIME_OFFSET_SECONDS * 1000));
+            let offsetSeconds = 60 - adjustedDate.getSeconds();
             let displaySeconds = offsetSeconds === 60 ? 0 : offsetSeconds;
             
             const timerEl = document.getElementById('timer-text');
